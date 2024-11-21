@@ -1,434 +1,140 @@
-<h1 align=center> Exp - 5 - Bubble Sort and Merge sort in CUDA </h1>
-<h3>NAME:TAMIZHARASI S</h3>
-<h3>REGISTER NO: 212222040170</h3>
-<h3>DATE</h3>
+# EXP-6---Matrix-multiplication-using-cuBLAS-in-CUDA-C-
+<h3>NAME: TAMIZHARASI S</h3> 
+<h3>REGISTER NO:212222040170</h3> 
+<h3>EX. NO:06</h3> 
+<h3>DATE:</h3>
 
-## AIM:
-To Implement Bubble Sort and Merge Sort on the GPU using CUDA to enhance the performance of sorting tasks by parallelizing comparisons and swaps within the sorting algorithm.
+# Objective
+To implement matrix multiplication on the GPU using the cuBLAS library in CUDA C, and analyze the performance improvement over CPU-based matrix multiplication by leveraging GPU acceleration.
 
-## EQUIPMENTS REQUIRED:
-- Hardware
-   - PCs with NVIDIA GPU & CUDA NVCC
-   - Google Colab with NVCC Compiler, CUDA Toolkit installed
+# AIM:
+To utilize the cuBLAS library for performing matrix multiplication on NVIDIA GPUs, enhancing the performance of matrix operations by parallelizing computations and utilizing efficient GPU memory access.
 
+Code Overview
+In this experiment, you will work with the provided CUDA C code that performs matrix multiplication using the cuBLAS library. The code initializes two matrices (A and B) on the host, transfers them to the GPU device, and uses cuBLAS functions to compute the matrix product (C). The resulting matrix C is then transferred back to the host for verification and output.
 
-## PROCEDURE:
+# EQUIPMENTS REQUIRED:
+Hardware:
+PC with NVIDIA GPU
+Google Colab with NVCC compiler
+Software:
+CUDA Toolkit (with cuBLAS library)
+NVCC (NVIDIA CUDA Compiler)
+Sample datasets for matrix multiplication (e.g., random matrices)
 
-1. **Initialize the CUDA Environment**:
-   - Set up the necessary hardware and software for CUDA programming, including an NVIDIA GPU and NVCC compiler (Google Colab with CUDA Toolkit if using a cloud environment).
+# PROCEDURE:
+Tasks:
+Initialize Host Memory:
 
-2. **Define Bubble Sort and Merge Sort Kernels**:
-   - **Bubble Sort Kernel**: Define a CUDA kernel to perform Bubble Sort using a single block and parallelizing comparisons and swaps across threads. Each thread performs a comparison and swap if necessary, iterating over multiple passes.
-   - **Merge Sort Kernel**: Define a CUDA kernel to perform Merge Sort in stages, where each thread merges sub-arrays, doubling the size of merged sub-arrays in each iteration.
+Allocate memory for matrices A, B, and C on the host (CPU). Use random values for matrices A and B.
+Allocate Device Memory:
 
-3. **Memory Allocation on Device**:
-   - Allocate device memory for the arrays to be sorted (using `cudaMalloc`).
-   - Copy data from the host (CPU) array to the device (GPU) using `cudaMemcpy`.
+Allocate corresponding memory on the GPU device for matrices A, B, and C using cudaMalloc().
+Transfer the host matrices A and B to the GPU device using cudaMemcpy().
+Matrix Multiplication using cuBLAS:
 
-4. **Kernel Execution and Synchronization**:
-   - Launch the Bubble Sort kernel or Merge Sort kernel on the GPU. Use appropriate block and grid dimensions, such as specifying block size and calculating the required number of blocks.
-   - Use `__syncthreads()` to synchronize threads after each pass in the sorting kernels, ensuring correct data access.
+Initialize the cuBLAS library using cublasCreate().
+Use the cublasSgemm() function to perform single-precision matrix multiplication on the GPU. This function computes the matrix product C = alpha * A * B + beta * C.
+Retrieve and Print Results:
 
-5. **CPU Sorting Functions**:
-   - Implement Bubble Sort and Merge Sort for the CPU to compare performance. Measure execution time using high-resolution clock timers from the `chrono` library.
+Copy the resulting matrix C from the device back to the host memory using cudaMemcpy().
+Print the matrices A, B, and C to verify the correctness of the multiplication.
+Clean Up Resources:
 
-6. **Run Sorting Algorithms**:
-   - Test both algorithms with arrays of different sizes (500 and 1000 elements) and configurations (different block sizes).
-   - For each sorting algorithm, execute both CPU and GPU implementations and measure execution times.
+Free the allocated host and device memory using free() and cudaFree().
+Shutdown the cuBLAS library using cublasDestroy().
 
-7. **Measure and Compare Performance**:
-   - Record the GPU execution time using `cudaEventRecord` for precise time tracking.
-   - Compare the CPU and GPU execution times for both sorting algorithms, noting the effect of different block sizes and array sizes.
-
-8. **Copy Data Back to Host and Clean Up**:
-   - After the GPU kernel completes, copy the sorted array back to the host.
-   - Free the allocated device memory to prevent memory leaks.
-
-9. **Output Results**:
-   - Print the execution times of Bubble Sort and Merge Sort on both CPU and GPU, formatted in a table for comparison.
-   - Analyze the performance improvement observed due to parallelization on the GPU.
-
-## PROGRAM:
-```c
+Performance Analysis:
+Measure the execution time of matrix multiplication using the cuBLAS library with different matrix sizes (e.g., 256x256, 512x512, 1024x1024).
+Experiment with varying block sizes (e.g., 16, 32, 64 threads per block) and analyze their effect on execution time.
+Compare the performance of the GPU-based matrix multiplication using cuBLAS with a standard CPU-based matrix multiplication implementation.
+# PROGRAM:
+```
+code = """
 #include <stdio.h>
 #include <stdlib.h>
-#include <cuda.h>
-#include <chrono>
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
 
-// Kernel for Bubble Sort
-__global__ void bubbleSortKernel(int *d_arr, int n) {
-    int temp;
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+#define MATRIX_SIZE 1024
 
-    // Ensure we're using a single block for Bubble Sort
-    if (blockIdx.x > 0) return;  // Only use the first block
+void fillMatrix(float *matrix, int rows, int cols) {
+    for (int i = 0; i < rows * cols; i++) {
+        matrix[i] = (float)(rand() % 100) / 10.0f;
+    }
+}
 
-    // Perform bubble sort across multiple passes
-    for (int i = 0; i < n - 1; i++) {
-        if (idx < n - 1 - i) {
-            if (d_arr[idx] > d_arr[idx + 1]) {
-                // Swap
-                temp = d_arr[idx];
-                d_arr[idx] = d_arr[idx + 1];
-                d_arr[idx + 1] = temp;
-            }
+void printMatrix(float *matrix, int rows, int cols) {
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            printf("%0.2f ", matrix[i * cols + j]);
         }
-        __syncthreads(); // Synchronize threads after each pass
+        printf("\\n");
     }
-}
-// Device function for merging arrays
-__device__ void merge(int *arr, int left, int mid, int right, int *temp) {
-    int i = left, j = mid + 1, k = left;
-
-    while (i <= mid && j <= right) {
-        if (arr[i] <= arr[j]) {
-            temp[k++] = arr[i++];
-        } else {
-            temp[k++] = arr[j++];
-        }
-    }
-
-    while (i <= mid) {
-        temp[k++] = arr[i++];
-    }
-
-    while (j <= right) {
-        temp[k++] = arr[j++];
-    }
-
-    for (i = left; i <= right; i++) {
-        arr[i] = temp[i];
-    }
+    printf("\\n");
 }
 
-// Kernel for Merge Sort
-__global__ void mergeSortKernel(int *d_arr, int *d_temp, int n) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-
-    // Loop over merging sizes: 1, 2, 4, 8, ...
-    for (int size = 1; size < n; size *= 2) {
-        int left = 2 * size * tid;
-        if (left < n) {
-            int mid = min(left + size - 1, n - 1);
-            int right = min(left + 2 * size - 1, n - 1);
-
-            merge(d_arr, left, mid, right, d_temp);  // Each thread merges one part
-        }
-
-        // Sync threads in the block to ensure all merges at this level are done
-        __syncthreads();
-
-        // Swap the array pointers
-        if (tid == 0) {
-            int *temp = d_arr;
-            d_arr = d_temp;
-            d_temp = temp;
-        }
-
-        // Sync again before starting next merge size
-        __syncthreads();
-    }
-}
-
-// Host function for merging arrays
-void mergeHost(int *arr, int left, int mid, int right) {
-    int i, j, k;
-    int n1 = mid - left + 1;
-    int n2 = right - mid;
-
-    int *L = (int*)malloc(n1 * sizeof(int));
-    int *R = (int*)malloc(n2 * sizeof(int));
-
-    for (i = 0; i < n1; i++)
-        L[i] = arr[left + i];
-    for (j = 0; j < n2; j++)
-        R[j] = arr[mid + 1 + j];
-
-    i = 0;
-    j = 0;
-    k = left;
-
-    while (i < n1 && j < n2) {
-        if (L[i] <= R[j]) {
-            arr[k] = L[i];
-            i++;
-        } else {
-            arr[k] = R[j];
-            j++;
-        }
-        k++;
-    }
-
-    while (i < n1) {
-        arr[k] = L[i];
-        i++;
-        k++;
-    }
-
-    while (j < n2) {
-        arr[k] = R[j];
-        j++;
-        k++;
-    }
-
-    free(L);
-    free(R);
-}
-
-// Bubble Sort on GPU
-void bubbleSort(int *arr, int n, int blockSize, int numBlocks) {
-    int *d_arr;
-    cudaMalloc((void**)&d_arr, n * sizeof(int));
-    cudaMemcpy(d_arr, arr, n * sizeof(int), cudaMemcpyHostToDevice);
-
-    // Start GPU timing
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
-
-    bubbleSortKernel<<<numBlocks, blockSize>>>(d_arr, n);
-    cudaDeviceSynchronize(); // Wait for GPU to finish
-
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-
-    cudaMemcpy(arr, d_arr, n * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaFree(d_arr);
-
-    printf("Bubble Sort (GPU) took %f milliseconds\n", milliseconds);
-}
-
-// Merge Sort on GPU
-void mergeSort(int *arr, int n, int blockSize, int numBlocks) {
-    int *d_arr, *d_temp;
-    cudaMalloc((void**)&d_arr, n * sizeof(int));
-    cudaMalloc((void**)&d_temp, n * sizeof(int));
-    cudaMemcpy(d_arr, arr, n * sizeof(int), cudaMemcpyHostToDevice);
-
-    // Start GPU timing
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
-
-
-    mergeSortKernel<<<numBlocks, blockSize>>>(d_arr, d_temp, n);
-    cudaDeviceSynchronize(); // Wait for GPU to finish
-
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-
-    cudaMemcpy(arr, d_arr, n * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaFree(d_arr);
-    cudaFree(d_temp);
-
-    printf("Merge Sort (GPU) took %f milliseconds\n", milliseconds);
-}
-
-// Bubble Sort on CPU
-void bubbleSortCPU(int *arr, int n) {
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = 0; j < n - i - 1; j++) {
-            if (arr[j] > arr[j + 1]) {
-                // Swap
-                int temp = arr[j];
-                arr[j] = arr[j + 1];
-                arr[j + 1] = temp;
-            }
-        }
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> duration = end - start;
-    printf("Bubble Sort (CPU) took %f milliseconds\n", duration.count());
-}
-
-// Merge Sort on CPU
-void mergeSortCPU(int *arr, int n) {
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (int size = 1; size < n; size *= 2) {
-        int left = 0;
-        while (left + size < n) {
-            int mid = left + size - 1;
-            int right = min(left + 2 * size - 1, n - 1);
-
-            mergeHost(arr, left, mid, right); // Call host merge
-            left += 2 * size;
-        }
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> duration = end - start;
-    printf("Merge Sort (CPU) took %f milliseconds\n", duration.count());
-}
-
-// Main function
 int main() {
-    int n_array[] = {500, 1000};
-    for (int i = 0; i < 2; i++) {
-        int n = n_array[i];
-        int *arr = (int*)malloc(n * sizeof(int));
+    float *h_A, *h_B, *h_C;
+    float *d_A, *d_B, *d_C;
+    int size = MATRIX_SIZE * MATRIX_SIZE * sizeof(float);
 
-        int blockSize_array[] = {16, 32};
+    h_A = (float *)malloc(size);
+    h_B = (float *)malloc(size);
+    h_C = (float *)malloc(size);
 
-        for (int i = 0; i < 2; i++) {
+    fillMatrix(h_A, MATRIX_SIZE, MATRIX_SIZE);
+    fillMatrix(h_B, MATRIX_SIZE, MATRIX_SIZE);
 
-            int blockSize = blockSize_array[i]; // or higher, depending on the architecture
-            int numBlocks = (n + blockSize - 1) / blockSize;
+    cudaMalloc((void **)&d_A, size);
+    cudaMalloc((void **)&d_B, size);
+    cudaMalloc((void **)&d_C, size);
 
-            printf("\nArray Size:%d\nBlock Size:%d\nNum Blocks:%d\n", n, blockSize, numBlocks);
+    cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
 
-            // Generating random array
-            for (int i = 0; i < n; i++) {
-                arr[i] = rand() % 1000;
-            }
+    cublasHandle_t handle;
+    cublasCreate(&handle);
 
-            // Bubble Sort CPU
-            bubbleSortCPU(arr, n);
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
 
-            // Generating random array again for GPU
-            for (int i = 0; i < n; i++) {
-                arr[i] = rand() % 1000;
-            }
+    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE, 
+                &alpha, d_A, MATRIX_SIZE, d_B, MATRIX_SIZE, &beta, d_C, MATRIX_SIZE);
 
-            // Bubble Sort GPU
-            bubbleSort(arr, n, blockSize, numBlocks);
+    cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
 
-            // Generating random array again for GPU
-            for (int i = 0; i < n; i++) {
-                arr[i] = rand() % 1000;
-            }
+    printf("Matrix A:\\n");
+    printMatrix(h_A, MATRIX_SIZE, MATRIX_SIZE);
+    printf("Matrix B:\\n");
+    printMatrix(h_B, MATRIX_SIZE, MATRIX_SIZE);
+    printf("Matrix C (Result):\\n");
+    printMatrix(h_C, MATRIX_SIZE, MATRIX_SIZE);
 
-            // Merge Sort CPU
-            mergeSortCPU(arr, n);
-            // Generating random array again for Merge Sort
-            for (int i = 0; i < n; i++) {
-                arr[i] = rand() % 1000;
-            }
-            // Merge Sort GPU
-            mergeSort(arr, n, blockSize, numBlocks);
-            printf("\n");
-        }
-        free(arr);
-    }
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+    free(h_A);
+    free(h_B);
+    free(h_C);
+    cublasDestroy(handle);
+
     return 0;
 }
+"""
+with open('matrix_mul.cu', 'w') as f:
+    f.write(code)
+```
+```
+!nvcc matrix_mul.cu -o matrix_mul -lcublas
+!./matrix_mul
 ```
 
-## OUTPUT:
-
-### Performance Comparison: CPU vs GPU
-
-<img style="display=inline" src="https://github.com/user-attachments/assets/f5be4f54-cb69-430e-a78f-2d9812d2bb0e" height="250"/>
+# OUTPUT:
+![image](https://github.com/user-attachments/assets/474fc949-61d3-41f8-bc3e-eed925a9098d)
 
 
-<table style="text-align=center">
-        <thead>
-            <tr>
-                <th>Algorithm</th>
-                <th>Array Size</th>
-                <th>Platform</th>
-                <th>Block Size</th>
-                <th>Num Blocks</th>
-                <th>Time (ms)</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td rowspan="3">Bubble Sort</td>
-                <td rowspan="3">500 elements</td>
-                <td>CPU</td>
-                <td>-</td>
-                <td>-</td>
-                <td>0.796549</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>16</td>
-                <td>32</td>
-                <td>0.316128</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>32</td>
-                <td>16</td>
-                <td>0.112608</td>
-            </tr>
-          <!-- Merge Sort 500 elements -->
-            <tr>
-                <td rowspan="3">Merge Sort</td>
-                <td rowspan="3">500 elements</td>
-                <td>CPU</td>
-                <td>-</td>
-                <td>-</td>
-                <td>0.276864</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>16</td>
-                <td>32</td>
-                <td>0.065606</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>32</td>
-                <td>16</td>
-                <td>0.064809</td>
-            </tr>
-          <!-- Bubble Sort 1000 elements -->
-            <tr>
-                <td rowspan="3">Bubble Sort</td>
-                <td rowspan="3">1000 elements</td>
-                <td>CPU</td>
-                <td>-</td>
-                <td>-</td>
-                <td>2.968457</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>16</td>
-                <td>63</td>
-                <td>0.208928</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>32</td>
-                <td>32</td>
-                <td>0.208992</td>
-            </tr>
-          <!-- Merge Sort 1000 elements -->
-            <tr>
-                <td rowspan="3">Merge Sort</td>
-                <td rowspan="3">1000 elements</td>
-                <td>CPU</td>
-                <td>-</td>
-                <td>-</td>
-                <td>0.504928</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>16</td>
-                <td>63</td>
-                <td>0.139932</td>
-            </tr>
-            <tr>
-                <td>GPU</td>
-                <td>32</td>
-                <td>32</td>
-                <td>0.141386</td>
-            </tr>
-        </tbody>
-    </table>
 
-## RESULT:
-Thus, the program has been executed using CUDA to implement Bubble Sort and Merge Sort on the GPU using CUDA and analyze the efficiency of this sorting algorithm when parallelized.
+# RESULT:
+
+Thus, the matrix multiplication has been successfully implemented using the cuBLAS library in CUDA C, demonstrating the enhanced performance of GPU-based computation over CPU-based approaches.
